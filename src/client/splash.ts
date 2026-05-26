@@ -95,7 +95,6 @@ function showToast(message: string): void {
   }
   const t = el('div', { class: 'toast', role: 'status', text: message });
   host.append(t);
-  // Trigger CSS transition by toggling class on next frame
   requestAnimationFrame(() => t.classList.add('show'));
   setTimeout(() => {
     t.classList.remove('show');
@@ -110,15 +109,16 @@ function navAction(opts: {
   ariaLabel: string;
 }): HTMLAnchorElement {
   // Devvit webview sandbox blocks window.open and target=_blank. Use the
-  // host bridge via @devvit/client's navigateTo, which postMessages the
-  // host to navigate outside the iframe. <a href> is preserved so right-
-  // click → "Open in new tab" still works as a fallback.
-  const a = document.createElement('a');
-  a.className = opts.className;
-  a.href = opts.href;
-  a.rel = 'noopener noreferrer';
-  a.setAttribute('aria-label', opts.ariaLabel);
-  a.textContent = opts.label;
+  // host bridge via @devvit/client's navigateTo, which postMessages the host
+  // to navigate outside the iframe. <a href> is preserved so right-click →
+  // "Open in new tab" still works as a fallback.
+  const a = el('a', {
+    class: opts.className,
+    href: opts.href,
+    rel: 'noopener noreferrer',
+    'aria-label': opts.ariaLabel,
+    text: opts.label,
+  });
   a.addEventListener('click', (e) => {
     e.preventDefault();
     try {
@@ -235,10 +235,10 @@ function renderFire(f: Fire, sub: string): HTMLElement {
     const shown = f.subjects.slice(0, 6);
     shown.forEach((s, i) => {
       subjects.append(subjectChip(s, f.kind));
-      if (i < shown.length - 1) subjects.append(document.createTextNode(' '));
+      if (i < shown.length - 1) subjects.append(' ');
     });
     if (f.subjects.length > 6) {
-      subjects.append(document.createTextNode(` +${f.subjects.length - 6} more`));
+      subjects.append(` +${f.subjects.length - 6} more`);
     }
     body.append(subjects);
   }
@@ -253,7 +253,7 @@ function renderFire(f: Fire, sub: string): HTMLElement {
       el('div', { class: 'score-detail' }, [
         el('span', { class: 'z', text: `z = ${f.zscore.toFixed(2)}` }),
         el('br'),
-        document.createTextNode(`observed ${f.observed} · baseline ${f.baseline.toFixed(1)}`),
+        `observed ${f.observed} · baseline ${f.baseline.toFixed(1)}`,
       ]),
     ]),
   );
@@ -426,4 +426,9 @@ async function refresh(): Promise<void> {
 
 document.getElementById('refreshBtn')?.addEventListener('click', () => void refresh());
 void refresh();
-setInterval(refresh, 30_000);
+setInterval(() => {
+  if (!document.hidden) void refresh();
+}, 30_000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void refresh();
+});

@@ -181,7 +181,6 @@ type StoredFire = {
 const KIND_LABELS: Record<string, string> = {
   user_burst: 'User burst',
   target_report_burst: 'Report burst',
-  topic_spike: 'Topic spike',
   near_duplicate_wave: 'Near-duplicate wave',
   coordinated_reporters: 'Coordinated reporters',
 };
@@ -279,7 +278,7 @@ async function onMenuSeedDemo(): Promise<{
       subreddit: sub,
     });
   }
-  for (const ev of events) await ingest(ev);
+  await Promise.all(events.map(ingest));
   // Cold-start workaround: pre-warm baselines with 30 samples of "0 events/min"
   // so the burst registers as a spike instead of polluting its own baseline.
   det.seedBaseline('user:demo_burst_user', 30, 0);

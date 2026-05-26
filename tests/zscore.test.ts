@@ -5,15 +5,16 @@ describe('RollingStats', () => {
   it('matches known mean and stddev', () => {
     const r = new RollingStats();
     for (const x of [2, 4, 4, 4, 5, 5, 7, 9]) r.push(x);
-    expect(r.average).toBeCloseTo(5, 5);
-    expect(r.stddev).toBeCloseTo(2.138, 2);
+    const s = r.snapshot();
+    expect(s.mean).toBeCloseTo(5, 5);
+    expect(s.std).toBeCloseTo(2.138, 2);
   });
 
   it('returns zero stddev for n<2', () => {
     const r = new RollingStats();
-    expect(r.stddev).toBe(0);
+    expect(r.snapshot().std).toBe(0);
     r.push(42);
-    expect(r.stddev).toBe(0);
+    expect(r.snapshot().std).toBe(0);
   });
 });
 

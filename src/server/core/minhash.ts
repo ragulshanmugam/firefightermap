@@ -60,14 +60,3 @@ export function jaccardEstimate(a: number[], b: number[]): number {
   for (let i = 0; i < a.length; i++) if (a[i] === b[i]) same++;
   return same / a.length;
 }
-
-// Banded LSH: signatures sharing any band hash are likely near-duplicates.
-export function lshBuckets(sig: number[], bands = 8): string[] {
-  const r = Math.floor(sig.length / bands);
-  const out: string[] = [];
-  for (let b = 0; b < bands; b++) {
-    const slice = sig.slice(b * r, (b + 1) * r).join(',');
-    out.push(`b${b}:${fnv1a(slice)}`);
-  }
-  return out;
-}

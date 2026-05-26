@@ -21,36 +21,4 @@ export const devvitKv: KV = {
   async zRemRangeByScore(key, min, max) {
     return redis.zRemRangeByScore(key, min, max);
   },
-
-  async hIncrBy(key, field, by) {
-    return redis.hIncrBy(key, field, by);
-  },
-
-  async hGet(key, field) {
-    const v = await redis.hGet(key, field);
-    return v === undefined ? undefined : Number(v);
-  },
-
-  async hGetAll(key) {
-    const m = (await redis.hGetAll(key)) ?? {};
-    const out: Record<string, number> = {};
-    for (const k of Object.keys(m)) out[k] = Number(m[k]);
-    return out;
-  },
-
-  async set(key, value, ttlSec) {
-    if (ttlSec) {
-      await redis.set(key, value, { expiration: new Date(Date.now() + ttlSec * 1000) });
-    } else {
-      await redis.set(key, value);
-    }
-  },
-
-  async get(key) {
-    return redis.get(key);
-  },
-
-  async expire(key, ttlSec) {
-    await redis.expire(key, ttlSec);
-  },
 };

@@ -4,8 +4,6 @@ type ZEntry = { member: string; score: number };
 
 export class MemoryKV implements KV {
   private z = new Map<string, ZEntry[]>();
-  private h = new Map<string, Map<string, number>>();
-  private s = new Map<string, string>();
 
   private getZ(key: string): ZEntry[] {
     let arr = this.z.get(key);
@@ -51,37 +49,4 @@ export class MemoryKV implements KV {
     }
     return removed;
   }
-
-  async hIncrBy(key: string, field: string, by: number): Promise<number> {
-    let m = this.h.get(key);
-    if (!m) {
-      m = new Map();
-      this.h.set(key, m);
-    }
-    const next = (m.get(field) ?? 0) + by;
-    m.set(field, next);
-    return next;
-  }
-
-  async hGet(key: string, field: string): Promise<number | undefined> {
-    return this.h.get(key)?.get(field);
-  }
-
-  async hGetAll(key: string): Promise<Record<string, number>> {
-    const m = this.h.get(key);
-    if (!m) return {};
-    const out: Record<string, number> = {};
-    for (const [k, v] of m) out[k] = v;
-    return out;
-  }
-
-  async set(key: string, value: string): Promise<void> {
-    this.s.set(key, value);
-  }
-
-  async get(key: string): Promise<string | undefined> {
-    return this.s.get(key);
-  }
-
-  async expire(): Promise<void> {}
 }

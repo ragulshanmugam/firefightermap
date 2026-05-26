@@ -1,15 +1,20 @@
 import type { KV } from './kv.ts';
 import { SlidingWindow } from './window.ts';
 import { RollingStats, zscore } from './zscore.ts';
-import { jaccardEstimate, lshBuckets, minhashSignature } from './minhash.ts';
+import { jaccardEstimate, minhashSignature } from './minhash.ts';
 import type { Event, Fire, FireKind, Sensitivity, Severity } from './types.ts';
 
 const WINDOW_MS = 15 * 60 * 1000;
+const WINDOW_MINUTES = WINDOW_MS / 60_000;
 const TIMELINE_MINUTES = 15;
 const GLOBAL_BUCKET = 'global:all';
 const BASELINE_MAX_MS = 24 * 60 * 60 * 1000;
-const NEAR_DUP_BUCKET_KEY = 'fmap:lsh';
-const NEAR_DUP_TTL_SEC = 30 * 60;
+
+export const BUCKET = {
+  user: 'user:',
+  target: 'target:',
+  reporter: 'reporter:',
+} as const;
 
 interface UnionFind<T> {
   find(x: T): T;
@@ -46,15 +51,20 @@ function severityWeight(sev: Severity): number {
   return sev === 'high' ? 3 : sev === 'medium' ? 2 : 1;
 }
 
+// Stable id derived from semantic fire identity. Snooze relies on this:
+// the same logical fire scanned across consecutive ticks must keep the same id.
+function fireId(kind: FireKind, subjects: string[], firstSeenMs: number): string {
+  const subjectKey = [...subjects].sort().join(',');
+  return `${kind}:${firstSeenMs}:${subjectKey}`;
+}
+
 export class FireDetector {
   private win: SlidingWindow;
   private baselines = new Map<string, RollingStats>();
   private recentSigs: Array<{ id: string; sig: number[]; ts: number; text: string }> = [];
-  private kv: KV;
   private sensitivity: Sensitivity;
 
   constructor(kv: KV, sensitivity: Sensitivity) {
-    this.kv = kv;
     this.sensitivity = sensitivity;
     this.win = new SlidingWindow(kv, BASELINE_MAX_MS);
   }
@@ -80,61 +90,59 @@ export class FireDetector {
   }
 
   async ingest(ev: Event): Promise<void> {
-    await this.win.record(GLOBAL_BUCKET, ev.ts, `${ev.kind}:${ev.ts}:${ev.authorId}`);
+    const writes: Array<Promise<void>> = [
+      this.win.record(GLOBAL_BUCKET, ev.ts, `${ev.kind}:${ev.ts}:${ev.authorId}`),
+    ];
     if (ev.kind === 'post' || ev.kind === 'comment') {
-      const bk = `user:${ev.authorId}`;
+      const bk = `${BUCKET.user}${ev.authorId}`;
       this.baseline(bk);
-      await this.win.record(bk, ev.ts, `${ev.kind}:${ev.ts}`);
+      writes.push(this.win.record(bk, ev.ts, `${ev.kind}:${ev.ts}`));
     }
     if (ev.kind === 'report') {
       if (ev.targetId) {
-        const bk = `target:${ev.targetId}`;
+        const bk = `${BUCKET.target}${ev.targetId}`;
         this.baseline(bk);
-        await this.win.record(bk, ev.ts, `r:${ev.reporterId}:${ev.ts}`);
+        writes.push(this.win.record(bk, ev.ts, `r:${ev.reporterId}:${ev.ts}`));
       }
       if (ev.reporterId) {
-        const bk = `reporter:${ev.reporterId}`;
+        const bk = `${BUCKET.reporter}${ev.reporterId}`;
         this.baseline(bk);
-        await this.win.record(bk, ev.ts, `t:${ev.targetId}:${ev.ts}`);
+        writes.push(this.win.record(bk, ev.ts, `t:${ev.targetId}:${ev.ts}`));
       }
     }
     if (ev.text && (ev.kind === 'post' || ev.kind === 'comment')) {
       const sig = minhashSignature(ev.text);
       this.recentSigs.push({ id: `${ev.kind}:${ev.ts}:${ev.authorId}`, sig, ts: ev.ts, text: ev.text });
-      const buckets = lshBuckets(sig);
-      await Promise.all(
-        buckets.map(async (b) => {
-          const key = `${NEAR_DUP_BUCKET_KEY}:${b}`;
-          await this.kv.hIncrBy(key, `${ev.ts}`, 1);
-          await this.kv.expire(key, NEAR_DUP_TTL_SEC);
-        }),
-      );
     }
+    await Promise.all(writes);
   }
 
-  // Samples 1-min counts into rolling stats; scheduler calls per minute.
+  // Samples 1-min counts into rolling stats and trims old window entries.
+  // Scheduler calls this every minute, so trim cost stays off the ingest path.
   async tickBaseline(nowMs: number, bucketKeys: string[]): Promise<void> {
     const oneMin = 60 * 1000;
-    const counts = await Promise.all(
-      bucketKeys.map((bk) => this.win.countInWindow(bk, nowMs, oneMin)),
-    );
+    const allBuckets = [GLOBAL_BUCKET, ...bucketKeys];
+    const [counts] = await Promise.all([
+      Promise.all(bucketKeys.map((bk) => this.win.countInWindow(bk, nowMs, oneMin))),
+      Promise.all(allBuckets.map((bk) => this.win.trim(bk, nowMs))),
+    ]);
     bucketKeys.forEach((bk, i) => this.baseline(bk).push(counts[i]!));
   }
 
   async scan(nowMs: number): Promise<Fire[]> {
     const fires: Fire[] = [
-      ...(await this.scanAxis('user_burst', 'user:', nowMs)),
-      ...(await this.scanAxis('target_report_burst', 'target:', nowMs)),
+      ...(await this.scanAxis('user_burst', BUCKET.user, nowMs)),
+      ...(await this.scanAxis('target_report_burst', BUCKET.target, nowMs)),
       ...(await this.scanReporterCoordination(nowMs)),
       ...this.scanNearDuplicates(nowMs),
     ];
     return fires
       .sort((a, b) => b.score - a.score)
-      .map((f, i) => ({ ...f, id: `${f.kind}:${i}:${nowMs}` }));
+      .map((f) => ({ ...f, id: fireId(f.kind, f.subjects, f.firstSeenMs) }));
   }
 
   private async scanAxis(
-    kind: FireKind,
+    kind: 'user_burst' | 'target_report_burst',
     prefix: string,
     nowMs: number,
   ): Promise<Fire[]> {
@@ -149,7 +157,7 @@ export class FireDetector {
       const observed = counts[i]!;
       const stats = this.baseline(bk).snapshot();
       const floor = this.sensitivity.minCountFloor[kind];
-      const z = zscore(observed, stats.mean * 15, stats.std * Math.sqrt(15), floor);
+      const z = zscore(observed, stats.mean * WINDOW_MINUTES, stats.std * Math.sqrt(WINDOW_MINUTES), floor);
       if (!z.exceededFloor || z.z < this.sensitivity.zMedium) continue;
       hits.push({ bk, observed, z: z.z, baseline: z.baseline, subjectId: bk.slice(prefix.length), sev: severity(z.z, this.sensitivity) });
     }
@@ -178,18 +186,20 @@ export class FireDetector {
 
   // Dormant on current Devvit — PostReport/CommentReport don't expose reporter id.
   private async scanReporterCoordination(nowMs: number): Promise<Fire[]> {
-    const reporterBuckets = [...this.baselines.keys()].filter((k) => k.startsWith('reporter:'));
+    const reporterBuckets = [...this.baselines.keys()].filter((k) => k.startsWith(BUCKET.reporter));
+    const memberSets = await Promise.all(
+      reporterBuckets.map((bk) => this.win.distinctMembersInWindow(bk, nowMs, WINDOW_MS)),
+    );
     const reporterTargets = new Map<string, Set<string>>();
-    for (const bk of reporterBuckets) {
-      const reporter = bk.slice('reporter:'.length);
-      const members = await this.win.distinctMembersInWindow(bk, nowMs, WINDOW_MS);
+    reporterBuckets.forEach((bk, i) => {
+      const reporter = bk.slice(BUCKET.reporter.length);
       const targets = new Set<string>();
-      for (const m of members) {
+      for (const m of memberSets[i]!) {
         const parts = m.split(':');
         if (parts.length >= 2 && parts[0] === 't' && parts[1]) targets.add(parts[1]);
       }
       if (targets.size > 0) reporterTargets.set(reporter, targets);
-    }
+    });
 
     const reporters = [...reporterTargets.keys()];
     const floor = this.sensitivity.minCountFloor.coordinated_reporters;
@@ -225,8 +235,10 @@ export class FireDetector {
       const overlap = intersection.size;
       if (overlap < floor) continue;
       const z = overlap / floor;
-      const sev: Severity = z >= 2 || group.length >= 4 ? 'high' : z >= 1.5 ? 'medium' : 'low';
-      if (sev === 'low') continue;
+      let sev: Severity;
+      if (z >= 2 || group.length >= 4) sev = 'high';
+      else if (z >= 1.5) sev = 'medium';
+      else continue;
       fires.push({
         id: '',
         kind: 'coordinated_reporters',
@@ -304,8 +316,6 @@ export class FireDetector {
         return `u/${subjectId} posted ${observed} times in 15min (z=${zr})`;
       case 'target_report_burst':
         return `${subjectId} received ${observed} reports in 15min (z=${zr})`;
-      case 'topic_spike':
-        return `Topic "${subjectId}" surged ${observed}× in 15min (z=${zr})`;
       default:
         return `${kind} on ${subjectId}: observed=${observed}, z=${zr}`;
     }

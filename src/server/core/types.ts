@@ -1,6 +1,3 @@
-// Shared types for events ingested from Devvit triggers and Fires produced
-// by the detector.
-
 export type EventKind = 'post' | 'comment' | 'report';
 
 export interface Event {
@@ -17,8 +14,7 @@ export interface Event {
 export type FireKind =
   | 'user_burst' // single user spiking across many items
   | 'target_report_burst' // one item getting hit with many reports fast
-  | 'topic_spike' // many posts with similar text/keyword
-  | 'coordinated_reporters' // same group of reporters hitting many items
+  | 'coordinated_reporters' // same group of reporters hitting many items (dormant — no reporter id from Devvit)
   | 'near_duplicate_wave'; // near-duplicate text across many posts
 
 export type Severity = 'low' | 'medium' | 'high';
@@ -45,7 +41,6 @@ export interface Sensitivity {
   minCountFloor: {
     user_burst: number;
     target_report_burst: number;
-    topic_spike: number;
     coordinated_reporters: number;
     near_duplicate_wave: number;
   };
@@ -60,7 +55,6 @@ export const PRESETS: Record<Sensitivity['name'], Sensitivity> = {
     minCountFloor: {
       user_burst: 5,
       target_report_burst: 4,
-      topic_spike: 4,
       coordinated_reporters: 3,
       near_duplicate_wave: 3,
     },
@@ -72,7 +66,6 @@ export const PRESETS: Record<Sensitivity['name'], Sensitivity> = {
     minCountFloor: {
       user_burst: 10,
       target_report_burst: 6,
-      topic_spike: 8,
       coordinated_reporters: 4,
       near_duplicate_wave: 5,
     },
@@ -84,7 +77,6 @@ export const PRESETS: Record<Sensitivity['name'], Sensitivity> = {
     minCountFloor: {
       user_burst: 25,
       target_report_burst: 12,
-      topic_spike: 20,
       coordinated_reporters: 6,
       near_duplicate_wave: 10,
     },

@@ -36,20 +36,8 @@ export class RollingStats {
     this.m2 += delta * (x - this.mean);
   }
 
-  get count(): number {
-    return this.n;
-  }
-
-  get average(): number {
-    return this.mean;
-  }
-
-  get stddev(): number {
-    if (this.n < 2) return 0;
-    return Math.sqrt(this.m2 / (this.n - 1));
-  }
-
   snapshot(): { n: number; mean: number; std: number } {
-    return { n: this.n, mean: this.mean, std: this.stddev };
+    const std = this.n < 2 ? 0 : Math.sqrt(this.m2 / (this.n - 1));
+    return { n: this.n, mean: this.mean, std };
   }
 }

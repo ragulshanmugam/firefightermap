@@ -1,5 +1,3 @@
-// Sliding-window event counter over a timestamp-scored sorted set.
-
 import type { KV } from './kv.ts';
 
 const WINDOW_PREFIX = 'fmap:win:';
@@ -18,9 +16,13 @@ export class SlidingWindow {
   }
 
   async record(bucket: string, nowMs: number, eventId: string): Promise<void> {
-    const k = this.key(bucket);
-    await this.kv.zAdd(k, nowMs, `${nowMs}:${eventId}`);
-    await this.kv.zRemRangeByScore(k, 0, nowMs - this.maxAgeMs);
+    await this.kv.zAdd(this.key(bucket), nowMs, `${nowMs}:${eventId}`);
+  }
+
+  // Trim entries older than maxAgeMs. Called from the scheduler tick — keeping
+  // it out of record() saves one Redis RTT per ingest on hot trigger paths.
+  async trim(bucket: string, nowMs: number): Promise<void> {
+    await this.kv.zRemRangeByScore(this.key(bucket), 0, nowMs - this.maxAgeMs);
   }
 
   async countInWindow(bucket: string, nowMs: number, windowMs: number): Promise<number> {

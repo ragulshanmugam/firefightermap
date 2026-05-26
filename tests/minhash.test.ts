@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { jaccardEstimate, lshBuckets, minhashSignature } from '../src/server/core/minhash.ts';
+import { jaccardEstimate, minhashSignature } from '../src/server/core/minhash.ts';
 
 describe('minhash', () => {
   it('gives jaccard ~1 for identical text', () => {
@@ -22,10 +22,4 @@ describe('minhash', () => {
     expect(jaccardEstimate(a, b)).toBeLessThan(0.2);
   });
 
-  it('LSH buckets overlap for near-duplicates', () => {
-    const a = lshBuckets(minhashSignature('Free iPhone giveaway click here scam'));
-    const b = lshBuckets(minhashSignature('Free iPhone giveaway click here SCAM!!'));
-    const overlap = a.filter((x) => b.includes(x));
-    expect(overlap.length).toBeGreaterThanOrEqual(1);
-  });
 });

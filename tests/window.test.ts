@@ -15,11 +15,13 @@ describe('SlidingWindow', () => {
     expect(await win.countInWindow('user:alice', t0 + 5000, 2000)).toBe(2);
   });
 
-  it('prunes events older than maxAge on each record', async () => {
+  it('trim() removes entries older than maxAge', async () => {
     const kv = new MemoryKV();
     const win = new SlidingWindow(kv, 10_000);
     await win.record('user:bob', 0, 'old');
     await win.record('user:bob', 100_000, 'new');
+    expect(await win.countInWindow('user:bob', 100_000, 200_000)).toBe(2);
+    await win.trim('user:bob', 100_000);
     expect(await win.countInWindow('user:bob', 100_000, 200_000)).toBe(1);
   });
 
