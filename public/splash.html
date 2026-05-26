@@ -8,20 +8,12 @@
     <link rel="stylesheet" href="splash.css" />
   </head>
   <body>
-    <nav class="globalnav" aria-label="Global">
-      <span class="brand-mark">
-        <span class="mark-glyph" aria-hidden="true"></span>
-        FirefighterMap
-      </span>
-      <span class="nav-spacer"></span>
+    <header class="subnav" aria-label="Page">
+      <h1>Live modqueue intelligence</h1>
       <span class="live-indicator" id="liveIndicator" aria-live="polite">
         <span class="live-dot" aria-hidden="true"></span>
         <span class="live-label">Live</span>
       </span>
-    </nav>
-
-    <header class="subnav" aria-label="Page">
-      <h1>Live modqueue intelligence</h1>
       <span class="spacer"></span>
       <div class="meta-pills" id="metaPills"></div>
       <button class="refresh-btn" id="refreshBtn" type="button" aria-label="Refresh now">
@@ -61,7 +53,6 @@
             </svg>
             <div class="ring-center">
               <div class="ring-total" id="ringTotal">0</div>
-              <div class="ring-total-sub">active fires</div>
             </div>
             <ul class="ring-legend" id="ringLegend">
               <li><span class="dot sev-high"></span>High <strong id="legendHigh">0</strong></li>

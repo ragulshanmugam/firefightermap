@@ -244,6 +244,10 @@ async function onMenuSeedDemo(): Promise<{
 }> {
   console.log('[fmap] seed-demo: invoked');
   const sub = context.subredditName ?? 'firefightermap_t';
+  // Use the mod's own username as the burst subject so the dashboard's
+  // "View u/X's posts" deep-link resolves to a real Reddit profile, not 404.
+  // Falls back to demo_burst_user only if the call fails (cold start, etc).
+  const burstUser = (await reddit.getCurrentUsername()) ?? 'demo_burst_user';
   const now = Date.now();
   const det = getDetector();
   const events: Event[] = [];
@@ -252,7 +256,7 @@ async function onMenuSeedDemo(): Promise<{
     events.push({
       kind: 'comment',
       ts: now - (8 - (i * 8) / 12) * 60_000,
-      authorId: 'demo_burst_user',
+      authorId: burstUser,
       text: `quick reaction ${i}`,
       subreddit: sub,
     });
@@ -281,10 +285,10 @@ async function onMenuSeedDemo(): Promise<{
   await Promise.all(events.map(ingest));
   // Cold-start workaround: pre-warm baselines with 30 samples of "0 events/min"
   // so the burst registers as a spike instead of polluting its own baseline.
-  det.seedBaseline('user:demo_burst_user', 30, 0);
+  det.seedBaseline(`user:${burstUser}`, 30, 0);
   for (let i = 0; i < 8; i++) det.seedBaseline(`user:demo_promo_${i}`, 30, 0);
   const globalCheck = await redis.zRange('fmap:win:global:all', 0, -1);
-  console.log(`[fmap] seed-demo: ingested ${events.length} events, redis sliding-window now has ${globalCheck.length} entries`);
+  console.log(`[fmap] seed-demo: burstUser=${burstUser}, ingested ${events.length} events, redis sliding-window now has ${globalCheck.length} entries`);
   await onSchedulerTick();
   return { showToast: { text: `Seeded ${events.length} demo events.`, appearance: 'success' } };
 }

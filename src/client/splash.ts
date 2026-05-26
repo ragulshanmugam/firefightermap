@@ -85,7 +85,26 @@ function sparkline(timeline: number[]): SVGElement {
   return svg;
 }
 
-const USER_SUBJECT_KINDS = new Set(['user_burst', 'coordinated_reporters']);
+// Per-fire-kind primary link. Reddit modqueue URL has no author/post filter,
+// so generic "/about/modqueue" buries the mod in the haystack. These deep-links
+// take them straight to the relevant evidence.
+function primaryActionFor(f: Fire, sub: string): { href: string; label: string } {
+  // Devvit's host bridge accepts shallow Reddit URLs (/user/X, /r/X/about/modqueue)
+  // but appears to silently no-op on deeper paths like /user/X/submitted or
+  // /about/spam. Stick to the working set; the labels stay action-oriented.
+  if (f.kind === 'user_burst' && f.subjects[0]) {
+    const u = f.subjects[0];
+    return { href: `https://www.reddit.com/user/${u}`, label: `View u/${u}` };
+  }
+  if (f.kind === 'target_report_burst' && f.subjects[0]) {
+    const target = f.subjects[0];
+    if (target.startsWith('t3_')) {
+      return { href: `https://redd.it/${target.slice(3)}`, label: 'Open reported post' };
+    }
+    return { href: `https://www.reddit.com/r/${sub}/about/modqueue`, label: 'Open in modqueue' };
+  }
+  return { href: `https://www.reddit.com/r/${sub}/about/modqueue`, label: 'Open in modqueue' };
+}
 
 function showToast(message: string): void {
   let host = document.getElementById('toastHost');
@@ -178,22 +197,13 @@ async function snoozeFire(id: string, btn: HTMLButtonElement): Promise<void> {
 function buildActions(f: Fire, sub: string): HTMLElement {
   const row = el('div', { class: 'fire-actions' });
 
+  const primary = primaryActionFor(f, sub);
   row.append(navAction({
-    href: `https://www.reddit.com/r/${sub}/about/modqueue`,
-    label: 'Open in modqueue',
+    href: primary.href,
+    label: primary.label,
     className: 'fire-action primary',
-    ariaLabel: `Open modqueue for r/${sub}`,
+    ariaLabel: primary.label,
   }));
-
-  if (USER_SUBJECT_KINDS.has(f.kind) && f.subjects.length > 0) {
-    const user = f.subjects[0]!;
-    row.append(navAction({
-      href: `https://www.reddit.com/user/${user}`,
-      label: `View u/${user}`,
-      className: 'fire-action',
-      ariaLabel: `Open profile for u/${user}`,
-    }));
-  }
 
   const modmailBtn = el('button', {
     class: 'fire-action',
@@ -245,18 +255,23 @@ function renderFire(f: Fire, sub: string): HTMLElement {
 
   if (f.timeline?.length) body.append(sparkline(f.timeline));
   body.append(buildActions(f, sub));
-  card.append(body);
 
-  card.append(
-    el('div', { class: 'fire-scores' }, [
-      el('div', { class: 'score-big', text: f.score.toFixed(1) }),
-      el('div', { class: 'score-detail' }, [
-        el('span', { class: 'z', text: `z = ${f.zscore.toFixed(2)}` }),
-        el('br'),
-        `observed ${f.observed} · baseline ${f.baseline.toFixed(1)}`,
-      ]),
-    ]),
-  );
+  const details = document.createElement('details');
+  details.className = 'fire-details';
+  const summary = document.createElement('summary');
+  summary.textContent = 'Detection details';
+  details.append(summary);
+  details.append(el('dl', { class: 'fire-details-dl' }, [
+    el('dt', { text: 'Observed' }),
+    el('dd', { text: `${f.observed} events in 15 min` }),
+    el('dt', { text: 'Baseline' }),
+    el('dd', { text: `${f.baseline.toFixed(1)} events / 15 min` }),
+    el('dt', { text: 'z-score' }),
+    el('dd', { text: f.zscore.toFixed(2) }),
+  ]));
+  body.append(details);
+
+  card.append(body);
   return card;
 }
 

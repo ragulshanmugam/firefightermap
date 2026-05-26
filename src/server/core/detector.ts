@@ -53,9 +53,13 @@ function severityWeight(sev: Severity): number {
 
 // Stable id derived from semantic fire identity. Snooze relies on this:
 // the same logical fire scanned across consecutive ticks must keep the same id.
-function fireId(kind: FireKind, subjects: string[], firstSeenMs: number): string {
-  const subjectKey = [...subjects].sort().join(',');
-  return `${kind}:${firstSeenMs}:${subjectKey}`;
+// Per-kind logic so that firstSeenMs (which slides every tick for scanAxis
+// fires) is never used as an id component.
+function fireId(f: Fire): string {
+  if (f.kind === 'near_duplicate_wave') {
+    return `${f.kind}:${[...f.sampleEventIds].sort().join(',')}`;
+  }
+  return `${f.kind}:${[...f.subjects].sort().join(',')}`;
 }
 
 export class FireDetector {
@@ -138,7 +142,7 @@ export class FireDetector {
     ];
     return fires
       .sort((a, b) => b.score - a.score)
-      .map((f) => ({ ...f, id: fireId(f.kind, f.subjects, f.firstSeenMs) }));
+      .map((f) => ({ ...f, id: fireId(f) }));
   }
 
   private async scanAxis(
@@ -309,15 +313,14 @@ export class FireDetector {
     return fires;
   }
 
-  private explain(kind: FireKind, subjectId: string, observed: number, z: number): string {
-    const zr = z.toFixed(1);
+  private explain(kind: FireKind, subjectId: string, observed: number, _z: number): string {
     switch (kind) {
       case 'user_burst':
-        return `u/${subjectId} posted ${observed} times in 15min (z=${zr})`;
+        return `u/${subjectId} posted ${observed} times in the last 15 minutes — far above their normal pace.`;
       case 'target_report_burst':
-        return `${subjectId} received ${observed} reports in 15min (z=${zr})`;
+        return `${subjectId} was reported ${observed} times in the last 15 minutes.`;
       default:
-        return `${kind} on ${subjectId}: observed=${observed}, z=${zr}`;
+        return `${kind} on ${subjectId} — ${observed} events in 15 min.`;
     }
   }
 }
