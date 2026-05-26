@@ -1,0 +1,64 @@
+{
+  "$schema": "https://developers.reddit.com/schema/config-file.v1.json",
+  "name": "firefightermap-t",
+  "post": {
+    "dir": "public",
+    "entrypoints": {
+      "default": {
+        "entry": "splash.html",
+        "height": "tall"
+      }
+    }
+  },
+  "server": {
+    "dir": "dist/server",
+    "entry": "index.js"
+  },
+  "menu": {
+    "items": [
+      {
+        "label": "FirefighterMap: open Live Fires",
+        "description": "Open the real-time modqueue cluster dashboard",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/open-dashboard"
+      },
+      {
+        "label": "FirefighterMap: seed demo fires",
+        "description": "Inject a known burst pattern for demo/screencast",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/seed-demo"
+      },
+      {
+        "label": "FirefighterMap: force scan now",
+        "description": "Run a detector scan immediately (don't wait for the minute cron)",
+        "location": "subreddit",
+        "forUserType": "moderator",
+        "endpoint": "/internal/menu/force-scan"
+      }
+    ]
+  },
+  "triggers": {
+    "onAppInstall": "/internal/on-app-install",
+    "onPostSubmit": "/internal/trigger/post-submit",
+    "onCommentSubmit": "/internal/trigger/comment-submit",
+    "onPostReport": "/internal/trigger/post-report",
+    "onCommentReport": "/internal/trigger/comment-report"
+  },
+  "scheduler": {
+    "tasks": {
+      "fmap-tick": {
+        "endpoint": "/internal/scheduler/tick",
+        "cron": "* * * * *"
+      }
+    }
+  },
+  "scripts": {
+    "dev": "node --experimental-strip-types ./tools/build.ts --watch",
+    "build": "node --experimental-strip-types ./tools/build.ts --minify"
+  },
+  "dev": {
+    "subreddit": "firefightermap_t_dev"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "private": true,
+  "name": "firefightermap-t",
+  "version": "0.0.0",
+  "license": "BSD-3-Clause",
+  "type": "module",
+  "scripts": {
+    "build": "node --experimental-strip-types ./tools/build.ts --minify",
+    "deploy": "npm run build && devvit upload",
+    "dev": "devvit playtest",
+    "login": "devvit login",
+    "launch": "npm run build && npm run deploy && devvit publish",
+    "type-check": "tsc --build",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "dependencies": {
+    "@devvit/web": "0.12.23",
+    "devvit": "0.12.23"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "esbuild": "0.28.0",
+    "typescript": "6.0.3",
+    "vitest": "^1.6.1"
+  }
+}
